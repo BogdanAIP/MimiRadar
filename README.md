@@ -19,5 +19,6 @@ DRY_RUN=1
 
 ```
 python -m pip install -e .
+python scripts/validate_sources.py
 python scripts/run.py
 ```

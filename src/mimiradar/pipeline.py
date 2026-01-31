@@ -10,7 +10,7 @@ import urllib.request
 
 from .config import DRY_RUN, TG_BOT_TOKEN, CHANNELS
 from .telegram import post_to_channel
-from .sources import SOURCES
+from .sources import SOURCES, BLOCKLIST
 
 
 LOG_PATH = "logs/run.log"
@@ -133,6 +133,9 @@ def run(limit_per_source: int = 5, max_posts: int = 20):
     queue = []
     for group, urls in SOURCES.items():
         for url in urls:
+            if url in BLOCKLIST:
+                logging.info("skipping blocked source %s", url)
+                continue
             try:
                 if url.endswith(".xml") or url.endswith(".rss") or "rss" in url or "feed" in url or "atom" in url:
                     items = _parse_rss(url)
