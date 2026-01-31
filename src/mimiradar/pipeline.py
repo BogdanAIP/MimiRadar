@@ -125,9 +125,7 @@ def _render(item):
         parts.append(summary[:400])
     if link:
         parts.append(link)
-    return "
-
-".join(parts)
+    return "\n\n".join(parts)
 
 
 def run(limit_per_source: int = 5, max_posts: int = 20):
