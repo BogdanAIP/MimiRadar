@@ -29,7 +29,7 @@ def check_url(url: str):
             return False
 
 
-def main(target_ok: int = 200, max_total_checks: int = 260):
+def main(target_ok: int = 200, max_total_checks: int = 120):
     ok = {}
     total_checks = 0
     for group, urls in SOURCES.items():
@@ -42,7 +42,7 @@ def main(target_ok: int = 200, max_total_checks: int = 260):
             total_checks += 1
             if check_url(url):
                 ok[group].append(url)
-            time.sleep(0.05)
+            time.sleep(0.03)
         if len(sum(ok.values(), [])) >= target_ok or total_checks >= max_total_checks:
             break
 
