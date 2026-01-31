@@ -11,17 +11,28 @@ def check_url(url: str):
     try:
         req = urllib.request.Request(
             url,
+            method="HEAD",
             headers={"User-Agent": "MimiRadar/0.1", "Range": "bytes=0-1024"},
         )
-        with urllib.request.urlopen(req, timeout=8) as resp:
+        with urllib.request.urlopen(req, timeout=6) as resp:
             code = resp.getcode()
             ctype = resp.headers.get("Content-Type", "")
             return {"url": url, "status": "ok", "code": code, "content_type": ctype}
-    except Exception as e:
-        return {"url": url, "status": "error", "error": str(e)}
+    except Exception:
+        try:
+            req = urllib.request.Request(
+                url,
+                headers={"User-Agent": "MimiRadar/0.1", "Range": "bytes=0-512"},
+            )
+            with urllib.request.urlopen(req, timeout=6) as resp:
+                code = resp.getcode()
+                ctype = resp.headers.get("Content-Type", "")
+                return {"url": url, "status": "ok", "code": code, "content_type": ctype}
+        except Exception as e:
+            return {"url": url, "status": "error", "error": str(e)}
 
 
-def main(max_per_group: int = 40):
+def main(max_per_group: int = 20):
     results = {"groups": {}, "summary": {"ok": 0, "error": 0, "blocked": 0}}
     start = time.monotonic()
     for group, urls in SOURCES.items():
