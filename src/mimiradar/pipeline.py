@@ -24,9 +24,12 @@ KEYWORDS = {
 
 
 def _fetch(url: str) -> str:
-    req = urllib.request.Request(url, headers={"User-Agent": "MimiRadar/0.1"})
-    with urllib.request.urlopen(req, timeout=20) as resp:
-        return resp.read().decode("utf-8", errors="ignore")
+    try:
+        req = urllib.request.Request(url, headers={"User-Agent": "MimiRadar/0.1"})
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read().decode("utf-8", errors="ignore")
+    except Exception:
+        return ""
 
 
 class LinkParser(HTMLParser):
