@@ -304,6 +304,15 @@ SOURCES = {
         "https://us-cert.cisa.gov/ncas/alerts.xml",
         "https://us-cert.cisa.gov/ncas/current-activity.xml",
     ],
+    "china": [
+        "https://www.chinadaily.com.cn/rss/china_rss.xml",
+        "https://www.chinadaily.com.cn/rss/world_rss.xml",
+        "https://www.chinadaily.com.cn/rss/bizchina_rss.xml",
+        "https://www.chinadaily.com.cn/rss/opinion_rss.xml",
+        "https://www.scmp.com/rss/91/feed",
+        "https://www.scmp.com/rss/92/feed",
+        "https://www.scmp.com/rss/2/feed",
+    ],
 }
 
 BLOCKLIST = {
