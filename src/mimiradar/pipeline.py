@@ -1,11 +1,10 @@
 import re
 import time
+import xml.etree.ElementTree as ET
 from datetime import datetime
-from urllib.parse import urlparse
-
-import feedparser
-import requests
-from bs4 import BeautifulSoup
+from html.parser import HTMLParser
+from urllib.parse import urljoin
+import urllib.request
 
 from .config import DRY_RUN, TG_BOT_TOKEN, CHANNELS
 from .telegram import post_to_channel
@@ -25,35 +24,70 @@ KEYWORDS = {
 
 
 def _fetch(url: str) -> str:
-    r = requests.get(url, timeout=20, headers={"User-Agent": "MimiRadar/0.1"})
-    r.raise_for_status()
-    return r.text
+    req = urllib.request.Request(url, headers={"User-Agent": "MimiRadar/0.1"})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+class LinkParser(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.links = []
+        self._current_href = None
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "a":
+            return
+        for k, v in attrs:
+            if k == "href":
+                self._current_href = v
+
+    def handle_endtag(self, tag):
+        if tag == "a":
+            self._current_href = None
+
+    def handle_data(self, data):
+        if self._current_href and data.strip():
+            self.links.append((data.strip(), self._current_href))
 
 
 def _parse_rss(url: str):
-    feed = feedparser.parse(url)
+    xml_text = _fetch(url)
     items = []
-    for e in feed.entries[:30]:
-        items.append({
-            "title": e.get("title", ""),
-            "link": e.get("link", ""),
-            "summary": re.sub("<.*?>", "", e.get("summary", ""))[:500],
-            "source": url,
-        })
+    try:
+        root = ET.fromstring(xml_text)
+    except ET.ParseError:
+        return items
+
+    for item in root.findall(".//item"):
+        title = (item.findtext("title") or "").strip()
+        link = (item.findtext("link") or "").strip()
+        summary = (item.findtext("description") or "").strip()
+        summary = re.sub("<.*?>", "", summary)[:500]
+        if title or link:
+            items.append({"title": title, "link": link, "summary": summary, "source": url})
+
+    if not items:
+        for entry in root.findall(".//{http://www.w3.org/2005/Atom}entry"):
+            title = (entry.findtext("{http://www.w3.org/2005/Atom}title") or "").strip()
+            link_el = entry.find("{http://www.w3.org/2005/Atom}link")
+            link = (link_el.get("href") if link_el is not None else "").strip()
+            summary = (entry.findtext("{http://www.w3.org/2005/Atom}summary") or "").strip()
+            summary = re.sub("<.*?>", "", summary)[:500]
+            if title or link:
+                items.append({"title": title, "link": link, "summary": summary, "source": url})
+
     return items
 
 
 def _parse_html(url: str):
     html = _fetch(url)
-    soup = BeautifulSoup(html, "html.parser")
+    parser = LinkParser()
+    parser.feed(html)
     items = []
-    for a in soup.select("a")[:50]:
-        title = (a.get_text() or "").strip()
-        link = a.get("href") or ""
-        if not title or not link:
-            continue
+    for title, link in parser.links[:50]:
         if link.startswith("/"):
-            link = f"{urlparse(url).scheme}://{urlparse(url).netloc}{link}"
+            link = urljoin(url, link)
         items.append({"title": title[:140], "link": link, "summary": "", "source": url})
     return items[:20]
 
@@ -75,9 +109,7 @@ def _render(item):
         parts.append(summary[:400])
     if link:
         parts.append(link)
-    return "
-
-".join(parts)
+    return "\n\n".join(parts)
 
 
 def run(limit_per_source: int = 5):
