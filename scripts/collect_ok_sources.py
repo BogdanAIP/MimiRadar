@@ -29,22 +29,26 @@ def check_url(url: str):
             return False
 
 
-def main(target_ok: int = 200):
+def main(target_ok: int = 200, max_total_checks: int = 260):
     ok = {}
+    total_checks = 0
     for group, urls in SOURCES.items():
         ok[group] = []
         for url in urls:
             if len(sum(ok.values(), [])) >= target_ok:
                 break
+            if total_checks >= max_total_checks:
+                break
+            total_checks += 1
             if check_url(url):
                 ok[group].append(url)
-            time.sleep(0.1)
-        if len(sum(ok.values(), [])) >= target_ok:
+            time.sleep(0.05)
+        if len(sum(ok.values(), [])) >= target_ok or total_checks >= max_total_checks:
             break
 
     total_ok = len(sum(ok.values(), []))
     with open("data/ok_sources.json", "w", encoding="utf-8") as f:
-        json.dump({"total_ok": total_ok, "sources": ok}, f, ensure_ascii=False, indent=2)
+        json.dump({"total_ok": total_ok, "checked": total_checks, "sources": ok}, f, ensure_ascii=False, indent=2)
 
 
 if __name__ == "__main__":
