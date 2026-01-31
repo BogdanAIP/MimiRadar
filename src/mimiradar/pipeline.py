@@ -1,3 +1,5 @@
+import json
+import logging
 import re
 import time
 import xml.etree.ElementTree as ET
@@ -10,6 +12,11 @@ from .config import DRY_RUN, TG_BOT_TOKEN, CHANNELS
 from .telegram import post_to_channel
 from .sources import SOURCES
 
+
+LOG_PATH = "logs/run.log"
+DATA_PATH = "data/last_run.json"
+
+logging.basicConfig(filename=LOG_PATH, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 KEYWORDS = {
     "MoltbookSkills": ["skill", "skills", "гайд", "tool", "plugin", "sdk"],
@@ -26,9 +33,10 @@ KEYWORDS = {
 def _fetch(url: str) -> str:
     try:
         req = urllib.request.Request(url, headers={"User-Agent": "MimiRadar/0.1"})
-        with urllib.request.urlopen(req, timeout=20) as resp:
+        with urllib.request.urlopen(req, timeout=12) as resp:
             return resp.read().decode("utf-8", errors="ignore")
-    except Exception:
+    except Exception as e:
+        logging.warning("fetch failed %s: %s", url, e)
         return ""
 
 
@@ -57,9 +65,12 @@ class LinkParser(HTMLParser):
 def _parse_rss(url: str):
     xml_text = _fetch(url)
     items = []
+    if not xml_text:
+        return items
     try:
         root = ET.fromstring(xml_text)
-    except ET.ParseError:
+    except ET.ParseError as e:
+        logging.warning("rss parse failed %s: %s", url, e)
         return items
 
     for item in root.findall(".//item"):
@@ -85,6 +96,8 @@ def _parse_rss(url: str):
 
 def _parse_html(url: str):
     html = _fetch(url)
+    if not html:
+        return []
     parser = LinkParser()
     parser.feed(html)
     items = []
@@ -112,36 +125,50 @@ def _render(item):
         parts.append(summary[:400])
     if link:
         parts.append(link)
-    return "\n\n".join(parts)
+    return "
+
+".join(parts)
 
 
-def run(limit_per_source: int = 5):
+def run(limit_per_source: int = 5, max_posts: int = 20):
     seen = set()
     queue = []
     for group, urls in SOURCES.items():
         for url in urls:
-            if url.endswith(".xml") or url.endswith(".rss") or "rss" in url or "feed" in url or "atom" in url:
-                items = _parse_rss(url)
-            else:
-                items = _parse_html(url)
+            try:
+                if url.endswith(".xml") or url.endswith(".rss") or "rss" in url or "feed" in url or "atom" in url:
+                    items = _parse_rss(url)
+                else:
+                    items = _parse_html(url)
+            except Exception as e:
+                logging.warning("parse failed %s: %s", url, e)
+                items = []
             for it in items[:limit_per_source]:
                 key = it.get("link") or it.get("title")
                 if key in seen:
                     continue
                 seen.add(key)
                 queue.append(it)
-            time.sleep(1)
+            time.sleep(0.5)
 
     results = []
-    for item in queue[:20]:
+    for item in queue[:max_posts]:
         channel_key = _classify(item)
         channel = CHANNELS.get(channel_key)
         text = _render(item)
+        if not channel:
+            continue
         if DRY_RUN:
             results.append({"channel": channel, "text": text, "dry": True})
         else:
-            res = post_to_channel(TG_BOT_TOKEN, channel, text, silent=True)
-            results.append(res)
-        time.sleep(1)
+            try:
+                res = post_to_channel(TG_BOT_TOKEN, channel, text, silent=True)
+                results.append(res)
+            except Exception as e:
+                logging.warning("post failed %s: %s", channel, e)
+        time.sleep(0.5)
 
-    return {"status": "ok", "time": datetime.utcnow().isoformat(), "posted": len(results), "results": results}
+    output = {"status": "ok", "time": datetime.utcnow().isoformat(), "posted": len(results), "results": results}
+    Path(DATA_PATH).write_text(json.dumps(output, ensure_ascii=False, indent=2))
+    logging.info("run finished posted=%s", len(results))
+    return output
