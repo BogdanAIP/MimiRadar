@@ -21,12 +21,12 @@ def check_url(url: str):
         return {"url": url, "status": "error", "error": str(e)}
 
 
-def main():
+def main(max_per_group: int = 40):
     results = {"groups": {}, "summary": {"ok": 0, "error": 0, "blocked": 0}}
     start = time.monotonic()
     for group, urls in SOURCES.items():
         group_results = []
-        for url in urls:
+        for url in urls[:max_per_group]:
             res = check_url(url)
             group_results.append(res)
             results["summary"][res["status"]] += 1
